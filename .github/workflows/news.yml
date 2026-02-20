@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y curl jq xmlstarlet
+        run: sudo apt-get update && sudo apt-get install -y curl jq xmlstarlet libxml2-utils
 
       # --- Fetch RSS ---
 
@@ -32,7 +32,8 @@ jobs:
           curl -s https://gigazine.net/news/rss_2.0/ -o giga.xml
           GIGA_DESC=$(xmllint --xpath "string(//item[1]/description)" giga.xml)
           echo "GIGA_DESC=$GIGA_DESC" >> $GITHUB_ENV
-# --- AI Summary ---
+
+      # --- AI Summary ---
 
       - name: Summarize with AI
         env:
@@ -42,13 +43,13 @@ jobs:
             curl -s https://models.inference.ai.azure.com/chat/completions \
               -H "Content-Type: application/json" \
               -H "Authorization: Bearer $API_KEY" \
-              -d "{
-                \"model\": \"gpt-4o-mini\",
-                \"messages\": [
-                  {\"role\": \"system\", \"content\": \"ニュースを2行で要約してください。\"},
-                  {\"role\": \"user\", \"content\": \"$1\"}
+              -d "$(jq -n --arg text "$1" '{
+                model: "gpt-4o-mini",
+                messages: [
+                  {role: "system", content: "ニュースを2行で要約してください。"},
+                  {role: "user", content: $text}
                 ]
-              }" | jq -r '.choices[0].message.content'
+              }')" | jq -r '.choices[0].message.content'
           }
 
           NHK_SUMMARY=$(summarize "$NHK_DESC")
@@ -72,6 +73,6 @@ jobs:
 
           curl -H "Content-Type: application/json" \
             -X POST \
-            -d "{\"content\":\"${CONTENT//\"/\\\"}\"}" \
+            -d "$(jq -n --arg content "$CONTENT" '{content: $content}')" \
             "$WEBHOOK"
           
