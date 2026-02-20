@@ -19,19 +19,25 @@ jobs:
         run: |
           curl -s https://www3.nhk.or.jp/rss/news/cat0.xml -o nhk.xml
           NHK_DESC=$(xmllint --xpath "string(//item[1]/description)" nhk.xml)
-          echo "NHK_DESC=$NHK_DESC" >> $GITHUB_ENV
+          echo "NHK_DESC<<EOF" >> $GITHUB_ENV
+          echo "$NHK_DESC" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Fetch ITmedia News
         run: |
           curl -s https://www.itmedia.co.jp/news/subtop/rss2/0.xml -o it.xml
           IT_DESC=$(xmllint --xpath "string(//item[1]/description)" it.xml)
-          echo "IT_DESC=$IT_DESC" >> $GITHUB_ENV
+          echo "IT_DESC<<EOF" >> $GITHUB_ENV
+          echo "$IT_DESC" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Fetch Gigazine Tech
         run: |
           curl -s https://gigazine.net/news/rss_2.0/ -o giga.xml
           GIGA_DESC=$(xmllint --xpath "string(//item[1]/description)" giga.xml)
-          echo "GIGA_DESC=$GIGA_DESC" >> $GITHUB_ENV
+          echo "GIGA_DESC<<EOF" >> $GITHUB_ENV
+          echo "$GIGA_DESC" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       # --- AI Summary ---
 
@@ -48,7 +54,7 @@ jobs:
               ]
             }' | curl -s https://models.inference.ai.azure.com/chat/completions \
               -H "Content-Type: application/json" \
-              -H "Authorization: Bearer '"$API_KEY"'" \
+              -H "Authorization: Bearer $API_KEY" \
               -d @- | jq -r '.choices[0].message.content'
           }
 
@@ -56,9 +62,15 @@ jobs:
           IT_SUMMARY=$(summarize "$IT_DESC")
           GIGA_SUMMARY=$(summarize "$GIGA_DESC")
 
-          echo "NHK_SUMMARY=$NHK_SUMMARY" >> $GITHUB_ENV
-          echo "IT_SUMMARY=$IT_SUMMARY" >> $GITHUB_ENV
-          echo "GIGA_SUMMARY=$GIGA_SUMMARY" >> $GITHUB_ENV
+          echo "NHK_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$NHK_SUMMARY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "IT_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$IT_SUMMARY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "GIGA_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$GIGA_SUMMARY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       # --- Send to Discord ---
 
