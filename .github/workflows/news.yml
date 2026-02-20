@@ -2,7 +2,7 @@ name: Daily AI News
 
 on:
   schedule:
-    - cron: "0 22 * * *"  # JST 7:00
+    - cron: "0 22 * * *"  # UTC 22:00 = JST 07:00
   workflow_dispatch:
 
 jobs:
@@ -10,31 +10,48 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Install xmllint (libxml2-utils) and jq for RSS parsing and JSON handling
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y curl jq xmlstarlet libxml2-utils
+        run: sudo apt-get update && sudo apt-get install -y curl jq libxml2-utils
 
       # --- Fetch RSS ---
 
+      # Fetch the top NHK news item description and store it as a multi-line env var
       - name: Fetch NHK Top News
         run: |
           curl -s https://www3.nhk.or.jp/rss/news/cat0.xml -o nhk.xml
           NHK_DESC=$(xmllint --xpath "string(//item[1]/description)" nhk.xml)
-          echo "NHK_DESC=$NHK_DESC" >> $GITHUB_ENV
+          {
+            echo "NHK_DESC<<EOF"
+            echo "$NHK_DESC"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
+      # Fetch the top ITmedia news item description
       - name: Fetch ITmedia News
         run: |
           curl -s https://www.itmedia.co.jp/news/subtop/rss2/0.xml -o it.xml
           IT_DESC=$(xmllint --xpath "string(//item[1]/description)" it.xml)
-          echo "IT_DESC=$IT_DESC" >> $GITHUB_ENV
+          {
+            echo "IT_DESC<<EOF"
+            echo "$IT_DESC"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
+      # Fetch the top Gigazine tech article description
       - name: Fetch Gigazine Tech
         run: |
           curl -s https://gigazine.net/news/rss_2.0/ -o giga.xml
           GIGA_DESC=$(xmllint --xpath "string(//item[1]/description)" giga.xml)
-          echo "GIGA_DESC=$GIGA_DESC" >> $GITHUB_ENV
+          {
+            echo "GIGA_DESC<<EOF"
+            echo "$GIGA_DESC"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
       # --- AI Summary ---
 
+      # Call GitHub Models (gpt-4o-mini) to summarize each article in 2 lines
       - name: Summarize with AI
         env:
           API_KEY: ${{ secrets.COPILOT_API_KEY }}
@@ -48,7 +65,7 @@ jobs:
               ]
             }' | curl -s https://models.inference.ai.azure.com/chat/completions \
               -H "Content-Type: application/json" \
-              -H "Authorization: Bearer '"$API_KEY"'" \
+              -H "Authorization: Bearer $API_KEY" \
               -d @- | jq -r '.choices[0].message.content'
           }
 
@@ -56,20 +73,32 @@ jobs:
           IT_SUMMARY=$(summarize "$IT_DESC")
           GIGA_SUMMARY=$(summarize "$GIGA_DESC")
 
-          echo "NHK_SUMMARY=$NHK_SUMMARY" >> $GITHUB_ENV
-          echo "IT_SUMMARY=$IT_SUMMARY" >> $GITHUB_ENV
-          echo "GIGA_SUMMARY=$GIGA_SUMMARY" >> $GITHUB_ENV
+          # Use heredoc format to safely write multi-line summaries to GITHUB_ENV
+          {
+            echo "NHK_SUMMARY<<EOF"
+            echo "$NHK_SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+          {
+            echo "IT_SUMMARY<<EOF"
+            echo "$IT_SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+          {
+            echo "GIGA_SUMMARY<<EOF"
+            echo "$GIGA_SUMMARY"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
       # --- Send to Discord ---
 
+      # Build the Discord message and POST it via webhook; jq handles JSON escaping
       - name: Send to Discord
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          CONTENT="📰 **今日のAI要約ニュース**\n\n\
-**【最重要ニュース】**\n$NHK_SUMMARY\n\n\
-**【ITニュース】**\n$IT_SUMMARY\n\n\
-**【AI・面白テック】**\n$GIGA_SUMMARY"
+          CONTENT="$(printf '📰 **今日のAI要約ニュース**\n\n**【最重要ニュース】**\n%s\n\n**【ITニュース】**\n%s\n\n**【AI・面白テック】**\n%s' \
+            "$NHK_SUMMARY" "$IT_SUMMARY" "$GIGA_SUMMARY")"
 
           jq -n --arg content "$CONTENT" '{content: $content}' | curl -s \
             -H "Content-Type: application/json" \
