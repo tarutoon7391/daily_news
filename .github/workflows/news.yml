@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y curl jq xmlstarlet
+        run: sudo apt-get update && sudo apt-get install -y curl jq xmlstarlet libxml2-utils
 
       # --- Fetch RSS ---
 
@@ -32,23 +32,24 @@ jobs:
           curl -s https://gigazine.net/news/rss_2.0/ -o giga.xml
           GIGA_DESC=$(xmllint --xpath "string(//item[1]/description)" giga.xml)
           echo "GIGA_DESC=$GIGA_DESC" >> $GITHUB_ENV
-# --- AI Summary ---
+
+      # --- AI Summary ---
 
       - name: Summarize with AI
         env:
           API_KEY: ${{ secrets.COPILOT_API_KEY }}
         run: |
           summarize() {
-            curl -s https://models.inference.ai.azure.com/chat/completions \
+            jq -n --arg content "$1" '{
+              model: "gpt-4o-mini",
+              messages: [
+                {role: "system", content: "ニュースを2行で要約してください。"},
+                {role: "user", content: $content}
+              ]
+            }' | curl -s https://models.inference.ai.azure.com/chat/completions \
               -H "Content-Type: application/json" \
-              -H "Authorization: Bearer $API_KEY" \
-              -d "{
-                \"model\": \"gpt-4o-mini\",
-                \"messages\": [
-                  {\"role\": \"system\", \"content\": \"ニュースを2行で要約してください。\"},
-                  {\"role\": \"user\", \"content\": \"$1\"}
-                ]
-              }" | jq -r '.choices[0].message.content'
+              -H "Authorization: Bearer '"$API_KEY"'" \
+              -d @- | jq -r '.choices[0].message.content'
           }
 
           NHK_SUMMARY=$(summarize "$NHK_DESC")
@@ -70,8 +71,8 @@ jobs:
 **【ITニュース】**\n$IT_SUMMARY\n\n\
 **【AI・面白テック】**\n$GIGA_SUMMARY"
 
-          curl -H "Content-Type: application/json" \
+          jq -n --arg content "$CONTENT" '{content: $content}' | curl -s \
+            -H "Content-Type: application/json" \
             -X POST \
-            -d "{\"content\":\"${CONTENT//\"/\\\"}\"}" \
+            -d @- \
             "$WEBHOOK"
-          
