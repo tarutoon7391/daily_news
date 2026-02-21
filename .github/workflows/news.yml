@@ -64,35 +64,35 @@ jobs:
           echo "【${IT_TITLE}】${IT_DESC}" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      - name: Fetch 4Gamer Game News
+      - name: Fetch ITmedia Buzz News
         run: |
-          HTTP_CODE=$(curl -s -o game_raw.xml -w "%{http_code}" \
+          HTTP_CODE=$(curl -s -o buzz_raw.xml -w "%{http_code}" \
             -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-            https://www.4gamer.net/rss/index.xml)
+            https://rss.itmedia.co.jp/rss/2.0/news_bursts.xml)
 
           if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "4Gamer RSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
-            echo "GAME_INPUT=4Gamer記事を取得できませんでした" >> $GITHUB_ENV
+            echo "ITmedia バズニュースRSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
+            echo "BUZZ_INPUT=ITmediaバズニュース記事を取得できませんでした" >> $GITHUB_ENV
             exit 0
           fi
 
-          DETECTED=$(file -bi game_raw.xml | grep -oP 'charset=\K[^ ;]+' || echo "utf-8")
+          DETECTED=$(file -bi buzz_raw.xml | grep -oP 'charset=\K[^ ;]+' || echo "utf-8")
           if [ "$DETECTED" != "utf-8" ] && [ "$DETECTED" != "us-ascii" ]; then
-            iconv -f "$DETECTED" -t UTF-8 game_raw.xml > game.xml
+            iconv -f "$DETECTED" -t UTF-8 buzz_raw.xml > buzz.xml
           else
-            mv game_raw.xml game.xml
+            mv buzz_raw.xml buzz.xml
           fi
 
-          if ! xmllint --noout game.xml 2>/dev/null; then
-            echo "4Gamerのレスポンスが有効なXMLではありません、スキップします..."
-            echo "GAME_INPUT=4Gamer記事を取得できませんでした" >> $GITHUB_ENV
+          if ! xmllint --noout buzz.xml 2>/dev/null; then
+            echo "ITmediaバズニュースのレスポンスが有効なXMLではありません、スキップします..."
+            echo "BUZZ_INPUT=ITmediaバズニュース記事を取得できませんでした" >> $GITHUB_ENV
             exit 0
           fi
 
-          GAME_TITLE=$(xmllint --xpath "string(//item[1]/title)" game.xml)
-          GAME_DESC=$(xmllint --xpath "string(//item[1]/description)" game.xml)
-          echo "GAME_INPUT<<EOF" >> $GITHUB_ENV
-          echo "【${GAME_TITLE}】${GAME_DESC}" >> $GITHUB_ENV
+          BUZZ_TITLE=$(xmllint --xpath "string(//item[1]/title)" buzz.xml)
+          BUZZ_DESC=$(xmllint --xpath "string(//item[1]/description)" buzz.xml)
+          echo "BUZZ_INPUT<<EOF" >> $GITHUB_ENV
+          echo "【${BUZZ_TITLE}】${BUZZ_DESC}" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       # --- AI Summary ---
@@ -116,7 +116,7 @@ jobs:
 
           NHK_SUMMARY=$(summarize "$NHK_INPUT")
           IT_SUMMARY=$(summarize "$IT_INPUT")
-          GAME_SUMMARY=$(summarize "$GAME_INPUT")
+          BUZZ_SUMMARY=$(summarize "$BUZZ_INPUT")
 
           echo "NHK_SUMMARY<<EOF" >> $GITHUB_ENV
           echo "$NHK_SUMMARY" >> $GITHUB_ENV
@@ -124,8 +124,8 @@ jobs:
           echo "IT_SUMMARY<<EOF" >> $GITHUB_ENV
           echo "$IT_SUMMARY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
-          echo "GAME_SUMMARY<<EOF" >> $GITHUB_ENV
-          echo "$GAME_SUMMARY" >> $GITHUB_ENV
+          echo "BUZZ_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$BUZZ_SUMMARY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       # --- Send to Discord ---
@@ -134,7 +134,7 @@ jobs:
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          CONTENT=$(printf '📰 **今日のAI要約ニュース**\n\n🌏 **【最重要ニュース】**\n%s\n\n💻 **【AI・テック】**\n%s\n\n🎮 **【ゲーム】**\n%s' "$NHK_SUMMARY" "$IT_SUMMARY" "$GAME_SUMMARY")
+          CONTENT=$(printf '📰 **今日のAI要約ニュース**\n\n🌏 **【最重要ニュース】**\n%s\n\n💻 **【AI・テック】**\n%s\n\n🔧 **【IT総合】**\n%s' "$NHK_SUMMARY" "$IT_SUMMARY" "$BUZZ_SUMMARY")
 
           jq -n --arg content "$CONTENT" '{content: $content}' | curl -s \
             -H "Content-Type: application/json" \
