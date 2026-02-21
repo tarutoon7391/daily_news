@@ -17,7 +17,16 @@ jobs:
 
       - name: Fetch NHK Top News
         run: |
-          curl -s https://www3.nhk.or.jp/rss/news/cat0.xml -o nhk.xml
+          HTTP_CODE=$(curl -s -o nhk.xml -w "%{http_code}" \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+            https://www3.nhk.or.jp/rss/news/cat0.xml)
+
+          if [ "$HTTP_CODE" -ne 200 ] || ! xmllint --noout nhk.xml 2>/dev/null; then
+            echo "NHK RSSの取得に失敗、スキップします..."
+            echo "NHK_DESC=NHK記事を取得できませんでした" >> $GITHUB_ENV
+            exit 0
+          fi
+
           NHK_DESC=$(xmllint --xpath "string(//item[1]/description)" nhk.xml)
           echo "NHK_DESC<<EOF" >> $GITHUB_ENV
           echo "$NHK_DESC" >> $GITHUB_ENV
@@ -25,7 +34,29 @@ jobs:
 
       - name: Fetch ITmedia News
         run: |
-          curl -s https://www.itmedia.co.jp/news/subtop/rss2/0.xml -o it.xml
+          HTTP_CODE=$(curl -s -o it_raw.xml -w "%{http_code}" \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+            https://rss.itmedia.co.jp/rss/2.0/news_bursts.xml)
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "ITmedia RSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
+            echo "IT_DESC=ITmedia記事を取得できませんでした" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          DETECTED=$(file -bi it_raw.xml | grep -oP 'charset=\K[^ ;]+' || echo "utf-8")
+          if [ "$DETECTED" != "utf-8" ] && [ "$DETECTED" != "us-ascii" ]; then
+            iconv -f "$DETECTED" -t UTF-8 it_raw.xml > it.xml
+          else
+            mv it_raw.xml it.xml
+          fi
+
+          if ! xmllint --noout it.xml 2>/dev/null; then
+            echo "ITmediaのレスポンスが有効なXMLではありません、スキップします..."
+            echo "IT_DESC=ITmedia記事を取得できませんでした" >> $GITHUB_ENV
+            exit 0
+          fi
+
           IT_DESC=$(xmllint --xpath "string(//item[1]/description)" it.xml)
           echo "IT_DESC<<EOF" >> $GITHUB_ENV
           echo "$IT_DESC" >> $GITHUB_ENV
@@ -33,7 +64,29 @@ jobs:
 
       - name: Fetch Gigazine Tech
         run: |
-          curl -s https://gigazine.net/news/rss_2.0/ -o giga.xml
+          HTTP_CODE=$(curl -s -o giga_raw.xml -w "%{http_code}" \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
+            https://gigazine.net/news/rss_2.0/)
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "Gigazine RSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
+            echo "GIGA_DESC=Gigazine記事を取得できませんでした" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          DETECTED=$(file -bi giga_raw.xml | grep -oP 'charset=\K[^ ;]+' || echo "utf-8")
+          if [ "$DETECTED" != "utf-8" ] && [ "$DETECTED" != "us-ascii" ]; then
+            iconv -f "$DETECTED" -t UTF-8 giga_raw.xml > giga.xml
+          else
+            mv giga_raw.xml giga.xml
+          fi
+
+          if ! xmllint --noout giga.xml 2>/dev/null; then
+            echo "Gigazineのレスポンスが有効なXMLではありません、スキップします..."
+            echo "GIGA_DESC=Gigazine記事を取得できませんでした" >> $GITHUB_ENV
+            exit 0
+          fi
+
           GIGA_DESC=$(xmllint --xpath "string(//item[1]/description)" giga.xml)
           echo "GIGA_DESC<<EOF" >> $GITHUB_ENV
           echo "$GIGA_DESC" >> $GITHUB_ENV
