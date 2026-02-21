@@ -78,10 +78,7 @@ jobs:
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          CONTENT="📰 **今日のAI要約ニュース**\n\n\
-**【最重要ニュース】**\n$NHK_SUMMARY\n\n\
-**【ITニュース】**\n$IT_SUMMARY\n\n\
-**【AI・面白テック】**\n$GIGA_SUMMARY"
+          CONTENT=$(printf '📰 **今日のAI要約ニュース**\n\n**【最重要ニュース】**\n%s\n\n**【ITニュース】**\n%s\n\n**【AI・面白テック】**\n%s' "$NHK_SUMMARY" "$IT_SUMMARY" "$GIGA_SUMMARY")
 
           jq -n --arg content "$CONTENT" '{content: $content}' | curl -s \
             -H "Content-Type: application/json" \
