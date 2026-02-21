@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y curl jq xmlstarlet libxml2-utils
+        run: sudo apt-get update && sudo apt-get install -y curl jq libxml2-utils
 
       # --- Fetch RSS ---
 
@@ -23,24 +23,25 @@ jobs:
 
           if [ "$HTTP_CODE" -ne 200 ] || ! xmllint --noout nhk.xml 2>/dev/null; then
             echo "NHK RSSの取得に失敗、スキップします..."
-            echo "NHK_DESC=NHK記事を取得できませんでした" >> $GITHUB_ENV
+            echo "NHK_INPUT=NHK記事を取得できませんでした" >> $GITHUB_ENV
             exit 0
           fi
 
+          NHK_TITLE=$(xmllint --xpath "string(//item[1]/title)" nhk.xml)
           NHK_DESC=$(xmllint --xpath "string(//item[1]/description)" nhk.xml)
-          echo "NHK_DESC<<EOF" >> $GITHUB_ENV
-          echo "$NHK_DESC" >> $GITHUB_ENV
+          echo "NHK_INPUT<<EOF" >> $GITHUB_ENV
+          echo "【${NHK_TITLE}】${NHK_DESC}" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      - name: Fetch ITmedia News
+      - name: Fetch ITmedia AI+ News
         run: |
           HTTP_CODE=$(curl -s -o it_raw.xml -w "%{http_code}" \
             -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-            https://rss.itmedia.co.jp/rss/2.0/news_bursts.xml)
+            https://rss.itmedia.co.jp/rss/2.0/aiplus.xml)
 
           if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "ITmedia RSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
-            echo "IT_DESC=ITmedia記事を取得できませんでした" >> $GITHUB_ENV
+            echo "ITmedia AI+ RSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
+            echo "IT_INPUT=ITmedia AI+記事を取得できませんでした" >> $GITHUB_ENV
             exit 0
           fi
 
@@ -52,44 +53,46 @@ jobs:
           fi
 
           if ! xmllint --noout it.xml 2>/dev/null; then
-            echo "ITmediaのレスポンスが有効なXMLではありません、スキップします..."
-            echo "IT_DESC=ITmedia記事を取得できませんでした" >> $GITHUB_ENV
+            echo "ITmedia AI+のレスポンスが有効なXMLではありません、スキップします..."
+            echo "IT_INPUT=ITmedia AI+記事を取得できませんでした" >> $GITHUB_ENV
             exit 0
           fi
 
+          IT_TITLE=$(xmllint --xpath "string(//item[1]/title)" it.xml)
           IT_DESC=$(xmllint --xpath "string(//item[1]/description)" it.xml)
-          echo "IT_DESC<<EOF" >> $GITHUB_ENV
-          echo "$IT_DESC" >> $GITHUB_ENV
+          echo "IT_INPUT<<EOF" >> $GITHUB_ENV
+          echo "【${IT_TITLE}】${IT_DESC}" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
-      - name: Fetch Gigazine Tech
+      - name: Fetch Nazology Science
         run: |
-          HTTP_CODE=$(curl -s -o giga_raw.xml -w "%{http_code}" \
+          HTTP_CODE=$(curl -s -o nazo_raw.xml -w "%{http_code}" \
             -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-            https://gigazine.net/news/rss_2.0/)
+            https://nazology.kusuguru.co.jp/feed)
 
           if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "Gigazine RSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
-            echo "GIGA_DESC=Gigazine記事を取得できませんでした" >> $GITHUB_ENV
+            echo "ナゾロジーRSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
+            echo "NAZO_INPUT=ナゾロジー記事を取得できませんでした" >> $GITHUB_ENV
             exit 0
           fi
 
-          DETECTED=$(file -bi giga_raw.xml | grep -oP 'charset=\K[^ ;]+' || echo "utf-8")
+          DETECTED=$(file -bi nazo_raw.xml | grep -oP 'charset=\K[^ ;]+' || echo "utf-8")
           if [ "$DETECTED" != "utf-8" ] && [ "$DETECTED" != "us-ascii" ]; then
-            iconv -f "$DETECTED" -t UTF-8 giga_raw.xml > giga.xml
+            iconv -f "$DETECTED" -t UTF-8 nazo_raw.xml > nazo.xml
           else
-            mv giga_raw.xml giga.xml
+            mv nazo_raw.xml nazo.xml
           fi
 
-          if ! xmllint --noout giga.xml 2>/dev/null; then
-            echo "Gigazineのレスポンスが有効なXMLではありません、スキップします..."
-            echo "GIGA_DESC=Gigazine記事を取得できませんでした" >> $GITHUB_ENV
+          if ! xmllint --noout nazo.xml 2>/dev/null; then
+            echo "ナゾロジーのレスポンスが有効なXMLではありません、スキップします..."
+            echo "NAZO_INPUT=ナゾロジー記事を取得できませんでした" >> $GITHUB_ENV
             exit 0
           fi
 
-          GIGA_DESC=$(xmllint --xpath "string(//item[1]/description)" giga.xml)
-          echo "GIGA_DESC<<EOF" >> $GITHUB_ENV
-          echo "$GIGA_DESC" >> $GITHUB_ENV
+          NAZO_TITLE=$(xmllint --xpath "string(//item[1]/title)" nazo.xml)
+          NAZO_DESC=$(xmllint --xpath "string(//item[1]/description)" nazo.xml)
+          echo "NAZO_INPUT<<EOF" >> $GITHUB_ENV
+          echo "【${NAZO_TITLE}】${NAZO_DESC}" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       # --- AI Summary ---
@@ -102,7 +105,7 @@ jobs:
             jq -n --arg content "$1" '{
               model: "gpt-4o-mini",
               messages: [
-                {role: "system", content: "ニュースを2行で要約してください。"},
+                {role: "system", content: "ニュースのタイトルと概要から、何が起きたか・なぜ重要かを具体的に2行で要約してください。固有名詞や数字は省略しないでください。"},
                 {role: "user", content: $content}
               ]
             }' | curl -s https://models.inference.ai.azure.com/chat/completions \
@@ -111,9 +114,9 @@ jobs:
               -d @- | jq -r '.choices[0].message.content'
           }
 
-          NHK_SUMMARY=$(summarize "$NHK_DESC")
-          IT_SUMMARY=$(summarize "$IT_DESC")
-          GIGA_SUMMARY=$(summarize "$GIGA_DESC")
+          NHK_SUMMARY=$(summarize "$NHK_INPUT")
+          IT_SUMMARY=$(summarize "$IT_INPUT")
+          NAZO_SUMMARY=$(summarize "$NAZO_INPUT")
 
           echo "NHK_SUMMARY<<EOF" >> $GITHUB_ENV
           echo "$NHK_SUMMARY" >> $GITHUB_ENV
@@ -121,8 +124,8 @@ jobs:
           echo "IT_SUMMARY<<EOF" >> $GITHUB_ENV
           echo "$IT_SUMMARY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
-          echo "GIGA_SUMMARY<<EOF" >> $GITHUB_ENV
-          echo "$GIGA_SUMMARY" >> $GITHUB_ENV
+          echo "NAZO_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$NAZO_SUMMARY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       # --- Send to Discord ---
@@ -131,7 +134,7 @@ jobs:
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          CONTENT=$(printf '📰 **今日のAI要約ニュース**\n\n**【最重要ニュース】**\n%s\n\n**【ITニュース】**\n%s\n\n**【AI・面白テック】**\n%s' "$NHK_SUMMARY" "$IT_SUMMARY" "$GIGA_SUMMARY")
+          CONTENT=$(printf '📰 **今日のAI要約ニュース**\n\n🌏 **【最重要ニュース】**\n%s\n\n💻 **【AI・テック】**\n%s\n\n🔬 **【サイエンス】**\n%s' "$NHK_SUMMARY" "$IT_SUMMARY" "$NAZO_SUMMARY")
 
           jq -n --arg content "$CONTENT" '{content: $content}' | curl -s \
             -H "Content-Type: application/json" \
