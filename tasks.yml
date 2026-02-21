@@ -1,6 +1,3 @@
-# 日付指定タスク（date: "YYYY-MM-DD"）
-# 毎日表示タスク（date: "every"）
-
 - date: "2026-02-21"
   task: "サンプルタスク（この行は自由に書き換えてね）"
 - date: "every"
