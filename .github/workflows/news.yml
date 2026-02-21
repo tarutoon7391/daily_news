@@ -75,13 +75,27 @@ jobs:
               -d @- | jq -r '.choices[0].message.content'
           }
 
-          for i in 1 2 3 4 5; do
-            eval "INPUT=\"[27m$IT${i}_INPUT[0m\""
-            SUMMARY=$(summarize "$INPUT")
-            echo "IT${i}_SUMMARY<<EOF" >> $GITHUB_ENV
-            echo "$SUMMARY" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
-          done
+          IT1_SUMMARY=$(summarize "$IT1_INPUT")
+          IT2_SUMMARY=$(summarize "$IT2_INPUT")
+          IT3_SUMMARY=$(summarize "$IT3_INPUT")
+          IT4_SUMMARY=$(summarize "$IT4_INPUT")
+          IT5_SUMMARY=$(summarize "$IT5_INPUT")
+
+          echo "IT1_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$IT1_SUMMARY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "IT2_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$IT2_SUMMARY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "IT3_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$IT3_SUMMARY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "IT4_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$IT4_SUMMARY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+          echo "IT5_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$IT5_SUMMARY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       # --- Send to Discord ---
 
