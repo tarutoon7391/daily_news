@@ -15,7 +15,7 @@ jobs:
 
       # --- Fetch RSS ---
 
-      - name: Fetch NHK Top News
+      - name: Fetch NHK Top 3 News
         run: |
           HTTP_CODE=$(curl -s -o nhk.xml -w "%{http_code}" \
             -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
@@ -23,77 +23,23 @@ jobs:
 
           if [ "$HTTP_CODE" -ne 200 ] || ! xmllint --noout nhk.xml 2>/dev/null; then
             echo "NHK RSSの取得に失敗、スキップします..."
-            echo "NHK_INPUT=NHK記事を取得できませんでした" >> $GITHUB_ENV
+            echo "NHK1_INPUT=NHK記事を取得できませんでした" >> $GITHUB_ENV
+            echo "NHK2_INPUT=NHK記事を取得できませんでした" >> $GITHUB_ENV
+            echo "NHK3_INPUT=NHK記事を取得できませんでした" >> $GITHUB_ENV
             exit 0
           fi
 
-          NHK_TITLE=$(xmllint --xpath "string(//item[1]/title)" nhk.xml)
-          NHK_DESC=$(xmllint --xpath "string(//item[1]/description)" nhk.xml)
-          echo "NHK_INPUT<<EOF" >> $GITHUB_ENV
-          echo "【${NHK_TITLE}】${NHK_DESC}" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      - name: Fetch ITmedia AI+ News
-        run: |
-          HTTP_CODE=$(curl -s -o it_raw.xml -w "%{http_code}" \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-            https://rss.itmedia.co.jp/rss/2.0/aiplus.xml)
-
-          if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "ITmedia AI+ RSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
-            echo "IT_INPUT=ITmedia AI+記事を取得できませんでした" >> $GITHUB_ENV
-            exit 0
-          fi
-
-          DETECTED=$(file -bi it_raw.xml | grep -oP 'charset=\K[^ ;]+' || echo "utf-8")
-          if [ "$DETECTED" != "utf-8" ] && [ "$DETECTED" != "us-ascii" ]; then
-            iconv -f "$DETECTED" -t UTF-8 it_raw.xml > it.xml
-          else
-            mv it_raw.xml it.xml
-          fi
-
-          if ! xmllint --noout it.xml 2>/dev/null; then
-            echo "ITmedia AI+のレスポンスが有効なXMLではありません、スキップします..."
-            echo "IT_INPUT=ITmedia AI+記事を取得できませんでした" >> $GITHUB_ENV
-            exit 0
-          fi
-
-          IT_TITLE=$(xmllint --xpath "string(//item[1]/title)" it.xml)
-          IT_DESC=$(xmllint --xpath "string(//item[1]/description)" it.xml)
-          echo "IT_INPUT<<EOF" >> $GITHUB_ENV
-          echo "【${IT_TITLE}】${IT_DESC}" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-      - name: Fetch ITmedia Buzz News
-        run: |
-          HTTP_CODE=$(curl -s -o buzz_raw.xml -w "%{http_code}" \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
-            https://rss.itmedia.co.jp/rss/2.0/news_bursts.xml)
-
-          if [ "$HTTP_CODE" -ne 200 ]; then
-            echo "ITmedia バズニュースRSSの取得に失敗（HTTP $HTTP_CODE）、スキップします..."
-            echo "BUZZ_INPUT=ITmediaバズニュース記事を取得できませんでした" >> $GITHUB_ENV
-            exit 0
-          fi
-
-          DETECTED=$(file -bi buzz_raw.xml | grep -oP 'charset=\K[^ ;]+' || echo "utf-8")
-          if [ "$DETECTED" != "utf-8" ] && [ "$DETECTED" != "us-ascii" ]; then
-            iconv -f "$DETECTED" -t UTF-8 buzz_raw.xml > buzz.xml
-          else
-            mv buzz_raw.xml buzz.xml
-          fi
-
-          if ! xmllint --noout buzz.xml 2>/dev/null; then
-            echo "ITmediaバズニュースのレスポンスが有効なXMLではありません、スキップします..."
-            echo "BUZZ_INPUT=ITmediaバズニュース記事を取得できませんでした" >> $GITHUB_ENV
-            exit 0
-          fi
-
-          BUZZ_TITLE=$(xmllint --xpath "string(//item[1]/title)" buzz.xml)
-          BUZZ_DESC=$(xmllint --xpath "string(//item[1]/description)" buzz.xml)
-          echo "BUZZ_INPUT<<EOF" >> $GITHUB_ENV
-          echo "【${BUZZ_TITLE}】${BUZZ_DESC}" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          for i in 1 2 3; do
+            TITLE=$(xmllint --xpath "string(//item[$i]/title)" nhk.xml 2>/dev/null || echo "")
+            DESC=$(xmllint --xpath "string(//item[$i]/description)" nhk.xml 2>/dev/null || echo "")
+            if [ -z "$TITLE" ]; then
+              echo "NHK${i}_INPUT=NHK記事${i}件目を取得できませんでした" >> $GITHUB_ENV
+            else
+              echo "NHK${i}_INPUT<<EOF" >> $GITHUB_ENV
+              echo "【${TITLE}】${DESC}" >> $GITHUB_ENV
+              echo "EOF" >> $GITHUB_ENV
+            fi
+          done
 
       # --- AI Summary ---
 
@@ -114,18 +60,18 @@ jobs:
               -d @- | jq -r '.choices[0].message.content'
           }
 
-          NHK_SUMMARY=$(summarize "$NHK_INPUT")
-          IT_SUMMARY=$(summarize "$IT_INPUT")
-          BUZZ_SUMMARY=$(summarize "$BUZZ_INPUT")
+          NHK1_SUMMARY=$(summarize "$NHK1_INPUT")
+          NHK2_SUMMARY=$(summarize "$NHK2_INPUT")
+          NHK3_SUMMARY=$(summarize "$NHK3_INPUT")
 
-          echo "NHK_SUMMARY<<EOF" >> $GITHUB_ENV
-          echo "$NHK_SUMMARY" >> $GITHUB_ENV
+          echo "NHK1_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$NHK1_SUMMARY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
-          echo "IT_SUMMARY<<EOF" >> $GITHUB_ENV
-          echo "$IT_SUMMARY" >> $GITHUB_ENV
+          echo "NHK2_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$NHK2_SUMMARY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
-          echo "BUZZ_SUMMARY<<EOF" >> $GITHUB_ENV
-          echo "$BUZZ_SUMMARY" >> $GITHUB_ENV
+          echo "NHK3_SUMMARY<<EOF" >> $GITHUB_ENV
+          echo "$NHK3_SUMMARY" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
 
       # --- Send to Discord ---
@@ -134,7 +80,7 @@ jobs:
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          CONTENT=$(printf '📰 **今日のAI要約ニュース**\n\n🌏 **【最重要ニュース】**\n%s\n\n💻 **【AI・テック】**\n%s\n\n🔧 **【IT総合】**\n%s' "$NHK_SUMMARY" "$IT_SUMMARY" "$BUZZ_SUMMARY")
+          CONTENT=$(printf '📰 **今日のAI要約ニュース**\n\n🌏 **【重大ニュース①】**\n%s\n\n🌏 **【重大ニュース②】**\n%s\n\n🌏 **【重大ニュース③】**\n%s' "$NHK1_SUMMARY" "$NHK2_SUMMARY" "$NHK3_SUMMARY")
 
           jq -n --arg content "$CONTENT" '{content: $content}' | curl -s \
             -H "Content-Type: application/json" \
