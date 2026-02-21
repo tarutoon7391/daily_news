@@ -10,8 +10,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install -y curl jq libxml2-utils
+
+      # --- Date & Tasks ---
+
+      - name: Get today's date (JST)
+        run: |
+          TODAY=$(TZ=Asia/Tokyo date '+%Y-%m-%d')
+          TODAY_DISPLAY=$(TZ=Asia/Tokyo date '+%Y/%m/%d（%a）' | sed 's/Mon/月/;s/Tue/火/;s/Wed/水/;s/Thu/木/;s/Fri/金/;s/Sat/土/;s/Sun/日/')
+          echo "TODAY=$TODAY" >> $GITHUB_ENV
+          echo "TODAY_DISPLAY=$TODAY_DISPLAY" >> $GITHUB_ENV
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Load tasks for today
+        run: |
+          TASK_LIST=""
+          while IFS= read -r line; do
+            DATE=$(echo "$line" | yq -r '.date')
+            TASK=$(echo "$line" | yq -r '.task')
+            if [ "$DATE" = "$TODAY" ] || [ "$DATE" = "every" ]; then
+              TASK_LIST="${TASK_LIST}・${TASK}\n"
+            fi
+          done < <(yq -c '.[]' tasks.yml)
+
+          if [ -z "$TASK_LIST" ]; then
+            TASK_LIST="今日のタスクはありません 🎉"
+          fi
+
+          echo "TASK_LIST<<EOF" >> $GITHUB_ENV
+          echo -e "$TASK_LIST" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       # --- Fetch RSS ---
 
@@ -103,7 +139,7 @@ jobs:
         env:
           WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: |
-          CONTENT=$(printf '📰 **今日のIT・AIニュース TOP5**\n\n💻 **【IT①】**\n%s\n\n💻 **【IT②】**\n%s\n\n💻 **【IT③】**\n%s\n\n💻 **【IT④】**\n%s\n\n💻 **【IT⑤】**\n%s' "$IT1_SUMMARY" "$IT2_SUMMARY" "$IT3_SUMMARY" "$IT4_SUMMARY" "$IT5_SUMMARY")
+          CONTENT=$(printf '📋 **今日のタスク**（%s）\n%s\n━━━━━━━━━━━━━━\n\n📰 **今日のIT・AIニュース TOP5**\n\n💻 **【IT①】**\n%s\n\n💻 **【IT②】**\n%s\n\n💻 **【IT③】**\n%s\n\n💻 **【IT④】**\n%s\n\n💻 **【IT⑤】**\n%s' "$TODAY_DISPLAY" "$TASK_LIST" "$IT1_SUMMARY" "$IT2_SUMMARY" "$IT3_SUMMARY" "$IT4_SUMMARY" "$IT5_SUMMARY")
 
           jq -n --arg content "$CONTENT" '{content: $content}' | curl -s \
             -H "Content-Type: application/json" \
