@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>テキスト ハクスラ RPG</title>
+  <style>
+    /* ===== ターミナル風レトロデザイン ===== */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #0a0a0a;
+      color: #00ff41;
+      font-family: "Courier New", Courier, monospace;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    #app {
+      width: 100%;
+      max-width: 720px;
+    }
+
+    /* タイトル */
+    h1 {
+      text-align: center;
+      font-size: 1.6rem;
+      letter-spacing: 0.2em;
+      margin-bottom: 20px;
+      color: #00ff41;
+      text-shadow: 0 0 8px #00ff41;
+    }
+
+    /* ステータスパネル */
+    #status-panel {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .status-box {
+      flex: 1;
+      border: 1px solid #00ff41;
+      padding: 10px 14px;
+      background: #0d0d0d;
+    }
+
+    .status-box h2 {
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+      color: #80ff80;
+    }
+
+    .status-name {
+      font-size: 1rem;
+      font-weight: bold;
+      margin-bottom: 6px;
+    }
+
+    /* HPバー */
+    .hp-bar-wrap {
+      background: #1a1a1a;
+      border: 1px solid #006600;
+      height: 12px;
+      margin-bottom: 4px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hp-bar {
+      height: 100%;
+      background: #00cc33;
+      transition: width 0.3s ease;
+    }
+
+    .hp-bar.danger {
+      background: #cc3300;
+    }
+
+    .hp-text {
+      font-size: 0.8rem;
+      color: #80ff80;
+    }
+
+    /* 戦闘ログ */
+    #log-area {
+      border: 1px solid #00ff41;
+      background: #060606;
+      height: 280px;
+      overflow-y: auto;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      font-size: 0.88rem;
+      line-height: 1.7;
+    }
+
+    #log-area p {
+      margin: 0;
+    }
+
+    #log-area p.system {
+      color: #ffff00;
+    }
+
+    #log-area p.player {
+      color: #00ff41;
+    }
+
+    #log-area p.enemy {
+      color: #ff6060;
+    }
+
+    #log-area p.info {
+      color: #60c0ff;
+    }
+
+    /* アクションボタンエリア */
+    #action-area {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 12px 8px;
+      background: #0a0a0a;
+      border: 1px solid #00ff41;
+      color: #00ff41;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 0.95rem;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .action-btn:hover:not(:disabled) {
+      background: #00ff41;
+      color: #0a0a0a;
+    }
+
+    .action-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    /* 次の敵 / リトライボタン */
+    #next-btn {
+      display: none;
+      width: 100%;
+      margin-top: 10px;
+      padding: 12px;
+      background: #0a0a0a;
+      border: 1px solid #ffff00;
+      color: #ffff00;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 1rem;
+      cursor: pointer;
+      letter-spacing: 0.1em;
+    }
+
+    #next-btn:hover {
+      background: #ffff00;
+      color: #0a0a0a;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>⚔ HACK &amp; SLASH RPG ⚔</h1>
+
+    <!-- ステータスパネル -->
+    <div id="status-panel">
+      <!-- プレイヤー情報 -->
+      <div class="status-box" id="player-box">
+        <h2>[ PLAYER ]</h2>
+        <div class="status-name" id="player-name"></div>
+        <div class="hp-bar-wrap"><div class="hp-bar" id="player-hp-bar"></div></div>
+        <div class="hp-text" id="player-hp-text"></div>
+        <div class="hp-text" id="player-level"></div>
+      </div>
+      <!-- 敵情報 -->
+      <div class="status-box" id="enemy-box">
+        <h2>[ ENEMY ]</h2>
+        <div class="status-name" id="enemy-name"></div>
+        <div class="hp-bar-wrap"><div class="hp-bar" id="enemy-hp-bar"></div></div>
+        <div class="hp-text" id="enemy-hp-text"></div>
+      </div>
+    </div>
+
+    <!-- 戦闘ログ -->
+    <div id="log-area"></div>
+
+    <!-- アクションボタン -->
+    <div id="action-area">
+      <button class="action-btn" id="btn-attack">⚔ 攻撃</button>
+      <button class="action-btn" id="btn-skill">✨ スキル</button>
+      <button class="action-btn" id="btn-run">🏃 逃げる</button>
+    </div>
+
+    <!-- 次の敵 / リトライ -->
+    <button id="next-btn"></button>
+  </div>
+
+  <script>
+    'use strict';
+
+    // ===== プレイヤークラス =====
+    class Player {
+      constructor(name, hp, attack, defense, level) {
+        this.name    = name;
+        this.maxHp   = hp;
+        this.hp      = hp;
+        this.attack  = attack;
+        this.defense = defense;
+        this.level   = level;
+        this.exp     = 0;            // 経験値
+        this.expToNext = 30;         // 次のレベルに必要な経験値
+        this.skillCooldown = 0;      // スキルのクールダウン（ターン数）
+      }
+
+      // 通常攻撃ダメージを計算して返す
+      calcAttackDamage() {
+        const base = this.attack;
+        // ±20% の乱数
+        const variance = Math.floor(base * 0.2);
+        return base + randInt(-variance, variance);
+      }
+
+      // スキル攻撃ダメージを計算して返す（通常の1.8〜2.2倍）
+      calcSkillDamage() {
+        return Math.floor(this.calcAttackDamage() * (1.8 + Math.random() * 0.4));
+      }
+
+      // ダメージを受ける（防御力で軽減）
+      takeDamage(rawDamage) {
+        const reduced = Math.max(1, rawDamage - this.defense);
+        this.hp = Math.max(0, this.hp - reduced);
+        return reduced;
+      }
+
+      // 経験値を得てレベルアップ判定
+      gainExp(amount) {
+        this.exp += amount;
+        const messages = [];
+        while (this.exp >= this.expToNext) {
+          this.exp -= this.expToNext;
+          this.level++;
+          this.maxHp   = Math.floor(this.maxHp   * 1.15);
+          this.hp      = this.maxHp; // レベルアップ時にHP全回復
+          this.attack  = Math.floor(this.attack  * 1.1);
+          this.defense = Math.floor(this.defense * 1.1);
+          this.expToNext = Math.floor(this.expToNext * 1.4);
+          messages.push(`レベルアップ！ Lv.${this.level} になった！ HP全回復！`);
+        }
+        return messages;
+      }
+
+      get isDead() {
+        return this.hp <= 0;
+      }
+    }
+
+    // ===== 敵クラス =====
+    class Enemy {
+      constructor(name, hp, attack, defense, expReward) {
+        this.name      = name;
+        this.maxHp     = hp;
+        this.hp        = hp;
+        this.attack    = attack;
+        this.defense   = defense;
+        this.expReward = expReward;
+      }
+
+      // 攻撃ダメージを計算して返す（±25% の乱数）
+      calcAttackDamage() {
+        const base = this.attack;
+        const variance = Math.floor(base * 0.25);
+        return base + randInt(-variance, variance);
+      }
+
+      // ダメージを受ける
+      takeDamage(rawDamage) {
+        const reduced = Math.max(1, rawDamage - this.defense);
+        this.hp = Math.max(0, this.hp - reduced);
+        return reduced;
+      }
+
+      get isDead() {
+        return this.hp <= 0;
+      }
+    }
+
+    // ===== 敵データテーブル =====
+    // { name, hp, attack, defense, expReward }
+    const ENEMY_TABLE = [
+      { name: 'スライム',       hp: 20,  attack:  8, defense: 1, expReward:  8 },
+      { name: 'ゴブリン',       hp: 35,  attack: 12, defense: 3, expReward: 15 },
+      { name: 'オーク',         hp: 55,  attack: 17, defense: 5, expReward: 25 },
+      { name: 'ウルフ',         hp: 45,  attack: 20, defense: 4, expReward: 22 },
+      { name: 'スケルトン',     hp: 60,  attack: 15, defense: 8, expReward: 28 },
+      { name: 'ダークエルフ',   hp: 70,  attack: 25, defense: 6, expReward: 38 },
+      { name: 'トロル',         hp: 100, attack: 28, defense: 10, expReward: 50 },
+      { name: 'ドラゴン',       hp: 180, attack: 40, defense: 15, expReward: 120 },
+    ];
+
+    // ===== ゲームバランス定数 =====
+    const ESCAPE_FAILURE_RATE = 0.3; // 逃げる失敗確率（30%）
+
+    // ===== ユーティリティ関数 =====
+
+    // min〜max（両端含む）のランダム整数
+    function randInt(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    // プレイヤーレベルに応じた適切な敵をランダム選択
+    function pickEnemy(playerLevel) {
+      // レベル帯に合わせてインデックスの範囲を決める
+      // 低レベル時に強い敵が出ないよう、最大インデックスを厳密に制限する
+      const minIdx = Math.max(0, playerLevel - 1);
+      const maxIdx = Math.min(ENEMY_TABLE.length - 1, playerLevel + 1);
+      const idx    = randInt(minIdx, maxIdx);
+      const data   = ENEMY_TABLE[idx];
+      return new Enemy(data.name, data.hp, data.attack, data.defense, data.expReward);
+    }
+
+    // ===== ゲーム管理オブジェクト =====
+    const Game = (() => {
+      // プレイヤーの初期値
+      let player = new Player('勇者', 60, 15, 5, 1);
+      let enemy  = null;
+      let turnCount = 0;
+
+      // ---- DOM参照 ----
+      const logArea      = document.getElementById('log-area');
+      const playerNameEl = document.getElementById('player-name');
+      const playerHpBar  = document.getElementById('player-hp-bar');
+      const playerHpText = document.getElementById('player-hp-text');
+      const playerLvEl   = document.getElementById('player-level');
+      const enemyNameEl  = document.getElementById('enemy-name');
+      const enemyHpBar   = document.getElementById('enemy-hp-bar');
+      const enemyHpText  = document.getElementById('enemy-hp-text');
+      const btnAttack    = document.getElementById('btn-attack');
+      const btnSkill     = document.getElementById('btn-skill');
+      const btnRun       = document.getElementById('btn-run');
+      const nextBtn      = document.getElementById('next-btn');
+
+      // ---- ログ出力 ----
+      // typeは 'system' | 'player' | 'enemy' | 'info'
+      function log(message, type = 'info') {
+        const p = document.createElement('p');
+        p.className = type;
+        p.textContent = `> ${message}`;
+        logArea.appendChild(p);
+        logArea.scrollTop = logArea.scrollHeight;
+      }
+
+      // ---- UI更新 ----
+      function updateUI() {
+        // プレイヤー
+        playerNameEl.textContent = `${player.name}  (Lv.${player.level})`;
+        const pRatio = player.hp / player.maxHp;
+        playerHpBar.style.width = `${Math.round(pRatio * 100)}%`;
+        playerHpBar.className   = 'hp-bar' + (pRatio <= 0.3 ? ' danger' : '');
+        playerHpText.textContent = `HP: ${player.hp} / ${player.maxHp}`;
+        playerLvEl.textContent   = `EXP: ${player.exp} / ${player.expToNext}`;
+
+        // 敵
+        if (enemy) {
+          enemyNameEl.textContent = enemy.name;
+          const eRatio = enemy.hp / enemy.maxHp;
+          enemyHpBar.style.width  = `${Math.round(eRatio * 100)}%`;
+          enemyHpBar.className    = 'hp-bar' + (eRatio <= 0.3 ? ' danger' : '');
+          enemyHpText.textContent = `HP: ${enemy.hp} / ${enemy.maxHp}`;
+        } else {
+          enemyNameEl.textContent = '---';
+          enemyHpBar.style.width  = '0%';
+          enemyHpText.textContent = 'HP: 0 / 0';
+        }
+
+        // スキルボタンのクールダウン表示
+        if (player.skillCooldown > 0) {
+          btnSkill.textContent = `✨ スキル (残${player.skillCooldown}T)`;
+          btnSkill.disabled = true;
+        } else {
+          btnSkill.textContent = '✨ スキル';
+          btnSkill.disabled = false;
+        }
+      }
+
+      // ---- ボタンの有効・無効を切り替える ----
+      function setButtonsEnabled(enabled) {
+        btnAttack.disabled = !enabled;
+        btnRun.disabled    = !enabled;
+        // スキルはクールダウン中なら無効のまま
+        if (enabled) {
+          btnSkill.disabled = player.skillCooldown > 0;
+        } else {
+          btnSkill.disabled = true;
+        }
+      }
+
+      // ---- 敵のターン処理 ----
+      function enemyTurn() {
+        if (!enemy || enemy.isDead) return;
+
+        const rawDmg    = enemy.calcAttackDamage();
+        const actualDmg = player.takeDamage(rawDmg);
+        log(`${enemy.name} の攻撃！ ${player.name} に ${actualDmg} のダメージ！`, 'enemy');
+
+        updateUI();
+
+        if (player.isDead) {
+          log(`${player.name} は倒れた...`, 'system');
+          log('--- GAME OVER ---', 'system');
+          setButtonsEnabled(false);
+          nextBtn.textContent = '▶ リトライ';
+          nextBtn.style.display = 'block';
+        }
+      }
+
+      // ---- 勝利処理 ----
+      function handleVictory() {
+        log(`${enemy.name} を倒した！`, 'system');
+        const expGained = enemy.expReward;
+        log(`経験値 ${expGained} を獲得！`, 'info');
+        const lvUpMsgs = player.gainExp(expGained);
+        lvUpMsgs.forEach(msg => log(msg, 'system'));
+        updateUI();
+
+        enemy = null;
+        setButtonsEnabled(false);
+        nextBtn.textContent  = '▶ 次の敵へ';
+        nextBtn.style.display = 'block';
+      }
+
+      // ---- 公開メソッド ----
+
+      // ゲーム開始
+      function init() {
+        // ボタンにイベントリスナーを登録（インラインonclickの代わり）
+        btnAttack.addEventListener('click', () => playerAction('attack'));
+        btnSkill.addEventListener('click',  () => playerAction('skill'));
+        btnRun.addEventListener('click',    () => playerAction('run'));
+        nextBtn.addEventListener('click',   () => nextBattle());
+
+        log('テキスト ハクスラ RPG へようこそ！', 'system');
+        log('ターン制バトルが始まる！', 'system');
+        startBattle();
+      }
+
+      // 戦闘開始
+      function startBattle() {
+        turnCount = 0;
+        enemy = pickEnemy(player.level - 1);
+        log(`--- ${enemy.name} が現れた！ ---`, 'system');
+        updateUI();
+        setButtonsEnabled(true);
+        nextBtn.style.display = 'none';
+      }
+
+      // 次の戦闘 or リトライ
+      function nextBattle() {
+        if (player.isDead) {
+          // リトライ: プレイヤーをリセット
+          player = new Player('勇者', 60, 15, 5, 1);
+          log('--- RETRY ---', 'system');
+        }
+        startBattle();
+      }
+
+      // プレイヤーのアクション
+      // actionType: 'attack' | 'skill' | 'run'
+      function playerAction(actionType) {
+        if (!enemy || enemy.isDead || player.isDead) return;
+
+        setButtonsEnabled(false); // 操作を一時ロック
+        turnCount++;
+
+        // クールダウンを1ターン減らす
+        if (player.skillCooldown > 0) player.skillCooldown--;
+
+        if (actionType === 'attack') {
+          // ===== 通常攻撃 =====
+          const rawDmg    = player.calcAttackDamage();
+          const actualDmg = enemy.takeDamage(rawDmg);
+          log(`${player.name} の攻撃！ ${enemy.name} に ${actualDmg} のダメージ！`, 'player');
+
+        } else if (actionType === 'skill') {
+          // ===== スキル攻撃 =====
+          const rawDmg    = player.calcSkillDamage();
+          const actualDmg = enemy.takeDamage(rawDmg);
+          log(`${player.name} のスキル発動！ ${enemy.name} に ${actualDmg} の大ダメージ！`, 'player');
+          player.skillCooldown = 3; // 3ターンのクールダウン
+
+        } else if (actionType === 'run') {
+          // ===== 逃げる =====
+          // 逃げ失敗判定（ESCAPE_FAILURE_RATE の確率で失敗）
+          if (Math.random() < ESCAPE_FAILURE_RATE) {
+            log(`${player.name} は逃げようとしたが、失敗した！`, 'info');
+            // 逃げ失敗時も敵のターンへ
+            updateUI();
+            setTimeout(() => {
+              enemyTurn();
+              if (!player.isDead) setButtonsEnabled(true);
+            }, 600);
+            return;
+          }
+          log(`${player.name} は逃げることに成功した！`, 'system');
+          enemy = null;
+          updateUI();
+          setButtonsEnabled(false);
+          nextBtn.textContent   = '▶ 次の敵へ';
+          nextBtn.style.display = 'block';
+          return;
+        }
+
+        updateUI();
+
+        // 敵が死亡判定
+        if (enemy.isDead) {
+          handleVictory();
+          return;
+        }
+
+        // 敵のターン（少し遅延させて読みやすくする）
+        setTimeout(() => {
+          enemyTurn();
+          if (!player.isDead) setButtonsEnabled(true);
+        }, 600);
+      }
+
+      // 公開するメソッドを返す（外部からはinitのみ呼び出す）
+      return { init };
+    })();
+
+    // ===== ゲーム開始 =====
+    Game.init();
+  </script>
+</body>
+</html>
